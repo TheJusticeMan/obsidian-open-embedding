@@ -30,7 +30,7 @@ async function initializePipeline(): Promise<FeatureExtractionPipeline> {
 		embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME, {
 			device: 'webgpu',
 			dtype: 'q8',
-		}) as FeatureExtractionPipeline;
+		});
 		self.postMessage({ type: 'init', status: 'success', device: 'webgpu' });
 	} catch {
 		// Fallback to WASM
@@ -38,7 +38,7 @@ async function initializePipeline(): Promise<FeatureExtractionPipeline> {
 			embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME, {
 				device: 'wasm',
 				dtype: 'q8',
-			}) as FeatureExtractionPipeline;
+			});
 			self.postMessage({ 
 				type: 'init', 
 				status: 'success', 

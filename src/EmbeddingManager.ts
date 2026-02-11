@@ -33,6 +33,10 @@ export class EmbeddingManager {
 	private isInitialized = false;
 	private initializationPromise: Promise<void> | null = null;
 
+	// Timeout configuration (in milliseconds)
+	private static readonly INIT_TIMEOUT_MS = 60000; // 60 seconds
+	private static readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds
+
 	private constructor() {
 		// Private constructor for singleton
 	}
@@ -116,7 +120,7 @@ export class EmbeddingManager {
 		}
 
 		if (message.type === 'embed') {
-			const embedMessage = message as EmbeddingResponse;
+			const embedMessage = message;
 			const pending = this.pendingRequests.get(embedMessage.id);
 			if (!pending) {
 				console.warn(`Received response for unknown request ID: ${embedMessage.id}`);
@@ -155,7 +159,7 @@ export class EmbeddingManager {
 			await new Promise<void>((resolve, reject) => {
 				const timeout = setTimeout(() => {
 					reject(new Error('Worker initialization timeout'));
-				}, 60000); // 60 second timeout
+				}, EmbeddingManager.INIT_TIMEOUT_MS);
 
 				const checkInit = setInterval(() => {
 					if (this.isInitialized) {
@@ -207,7 +211,7 @@ export class EmbeddingManager {
 					this.pendingRequests.delete(messageId);
 					reject(new Error('Embedding generation timeout'));
 				}
-			}, 30000); // 30 second timeout
+			}, EmbeddingManager.REQUEST_TIMEOUT_MS);
 		});
 	}
 

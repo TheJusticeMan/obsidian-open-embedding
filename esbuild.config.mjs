@@ -38,14 +38,35 @@ const workerPlugin = {
 			let mainCode = fs.readFileSync('main.js', 'utf-8');
 			
 			// Replace the WORKER_CODE placeholder with the actual worker code
-			// This matches both minified (return WORKER_CODE) and non-minified patterns
+			// Look for the specific pattern in getWorkerCode function
+			const pattern = /getWorkerCode\(\)[^}]*{\s*return WORKER_CODE;?\s*}/g;
+			const beforeCount = (mainCode.match(pattern) || []).length;
+			
 			mainCode = mainCode.replace(
-				/return WORKER_CODE[;]?/g,
-				`return ${escapedWorkerCode};`
+				pattern,
+				(match) => match.replace(/return WORKER_CODE;?/, `return ${escapedWorkerCode};`)
 			);
+			
+			const afterCount = (mainCode.match(pattern) || []).length;
+			
+			// Validate that the replacement succeeded
+			if (beforeCount === 0) {
+				// Try a simpler pattern for minified code
+				const simplePattern = /return WORKER_CODE/;
+				if (!simplePattern.test(mainCode)) {
+					throw new Error('Failed to inject worker code: WORKER_CODE pattern not found in main.js');
+				}
+				// Use the simple replace as fallback
+				mainCode = mainCode.replace(simplePattern, `return ${escapedWorkerCode}`);
+			}
+			if (afterCount > 0) {
+				throw new Error(`Failed to inject worker code: ${afterCount} WORKER_CODE pattern(s) still exist after replacement`);
+			}
 			
 			// Write back the main.js file
 			fs.writeFileSync('main.js', mainCode);
+			
+			console.log(`✓ Worker code injected successfully (${Math.max(beforeCount, 1)} replacement(s))`);
 		});
 	},
 };
