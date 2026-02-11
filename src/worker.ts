@@ -3,7 +3,7 @@
  * Uses Transformers.js v4 for feature extraction with WebGPU acceleration
  */
 
-import { pipeline, env } from '@huggingface/transformers';
+import { pipeline, env, type FeatureExtractionPipeline } from '@huggingface/transformers';
 
 // Configure environment for Web Worker context
 env.allowLocalModels = false;
@@ -14,13 +14,13 @@ const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
 const EXPECTED_DIMENSIONS = 384;
 
 // Singleton pipeline instance
-let embeddingPipeline: Awaited<ReturnType<typeof pipeline>> | null = null;
+let embeddingPipeline: FeatureExtractionPipeline | null = null;
 
 /**
  * Initialize the feature extraction pipeline
  * Attempts to use WebGPU first, falls back to WASM
  */
-async function initializePipeline() {
+async function initializePipeline(): Promise<FeatureExtractionPipeline> {
 	if (embeddingPipeline) {
 		return embeddingPipeline;
 	}
@@ -30,15 +30,15 @@ async function initializePipeline() {
 		embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME, {
 			device: 'webgpu',
 			dtype: 'q8',
-		});
+		}) as FeatureExtractionPipeline;
 		self.postMessage({ type: 'init', status: 'success', device: 'webgpu' });
-	} catch (webgpuError) {
+	} catch {
 		// Fallback to WASM
 		try {
 			embeddingPipeline = await pipeline('feature-extraction', MODEL_NAME, {
 				device: 'wasm',
 				dtype: 'q8',
-			});
+			}) as FeatureExtractionPipeline;
 			self.postMessage({ 
 				type: 'init', 
 				status: 'success', 
@@ -46,10 +46,11 @@ async function initializePipeline() {
 				warning: 'WebGPU not available, using WASM fallback'
 			});
 		} catch (wasmError) {
+			const errorMessage = wasmError instanceof Error ? wasmError.message : 'Unknown error';
 			self.postMessage({ 
 				type: 'init', 
 				status: 'error', 
-				error: `Failed to initialize pipeline: ${wasmError}` 
+				error: `Failed to initialize pipeline: ${errorMessage}` 
 			});
 			throw wasmError;
 		}
@@ -68,10 +69,10 @@ async function generateEmbedding(text: string): Promise<number[]> {
 	const output = await pipeline(text, {
 		pooling: 'mean',
 		normalize: true,
-	});
+	}) as { data: Float32Array };
 
 	// Extract the embedding array
-	const embedding = Array.from(output.data as Float32Array);
+	const embedding = Array.from(output.data);
 
 	// Validate dimensions
 	if (embedding.length !== EXPECTED_DIMENSIONS) {
@@ -87,16 +88,18 @@ async function generateEmbedding(text: string): Promise<number[]> {
  * Message handler for the Web Worker
  */
 self.onmessage = async (event: MessageEvent) => {
-	const { id, type, text } = event.data;
+	const messageData = event.data as { id?: string; type?: string; text?: string };
+	const { id, type, text } = messageData;
 
 	try {
 		switch (type) {
-			case 'init':
+			case 'init': {
 				// Preload the model
 				await initializePipeline();
 				break;
+			}
 
-			case 'embed':
+			case 'embed': {
 				if (!text || typeof text !== 'string') {
 					throw new Error('Invalid input: text must be a non-empty string');
 				}
@@ -109,16 +112,18 @@ self.onmessage = async (event: MessageEvent) => {
 					embedding,
 				});
 				break;
+			}
 
 			default:
-				throw new Error(`Unknown message type: ${type}`);
+				throw new Error(`Unknown message type: ${type ?? 'undefined'}`);
 		}
 	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		self.postMessage({
 			id,
-			type: type || 'unknown',
+			type: type ?? 'unknown',
 			status: 'error',
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage,
 		});
 	}
 };

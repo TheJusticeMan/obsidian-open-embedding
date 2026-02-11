@@ -38,8 +38,9 @@ const workerPlugin = {
 			let mainCode = fs.readFileSync('main.js', 'utf-8');
 			
 			// Replace the WORKER_CODE placeholder with the actual worker code
+			// This matches both minified (return WORKER_CODE) and non-minified patterns
 			mainCode = mainCode.replace(
-				/\/\*\s*@ts-ignore.*?\*\/[\s\n]*return WORKER_CODE;/g,
+				/return WORKER_CODE[;]?/g,
 				`return ${escapedWorkerCode};`
 			);
 			

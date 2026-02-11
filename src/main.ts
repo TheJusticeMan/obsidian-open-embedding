@@ -5,8 +5,6 @@ export default class OpenEmbeddingPlugin extends Plugin {
 	private embeddingManager: EmbeddingManager | null = null;
 
 	async onload() {
-		console.log('Loading Open Embeddings plugin');
-
 		// Initialize the embedding manager
 		this.embeddingManager = EmbeddingManager.getInstance();
 
@@ -22,7 +20,8 @@ export default class OpenEmbeddingPlugin extends Plugin {
 					const embedding = await this.embeddingManager?.getEmbedding(testText);
 					
 					if (embedding) {
-						new Notice(`Generated ${embedding.length}-dimensional embedding!`);
+						new Notice(`Generated ${embedding.length}-dimensional embedding`);
+						// eslint-disable-next-line no-console
 						console.log('Test embedding:', embedding.slice(0, 10), '...');
 					}
 				} catch (error) {
@@ -35,12 +34,10 @@ export default class OpenEmbeddingPlugin extends Plugin {
 
 		// Add a status bar item
 		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Open Embeddings ready');
+		statusBarItemEl.setText('Open embeddings ready');
 	}
 
 	onunload() {
-		console.log('Unloading Open Embeddings plugin');
-		
 		// Clean up the embedding manager
 		if (this.embeddingManager) {
 			this.embeddingManager.dispose();

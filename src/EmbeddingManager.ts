@@ -3,6 +3,9 @@
  * Creates and communicates with the worker using an inline Blob for portability
  */
 
+// Declare the global WORKER_CODE variable that will be injected at build time
+declare const WORKER_CODE: string;
+
 export interface EmbeddingResponse {
 	id: string;
 	type: string;
@@ -88,40 +91,44 @@ export class EmbeddingManager {
 	private getWorkerCode(): string {
 		// This will be replaced with the actual worker code by our build process
 		// The worker code is imported and stringified
-		// @ts-ignore - WORKER_CODE is injected at build time
 		return WORKER_CODE;
 	}
 
 	/**
 	 * Handle messages from the Web Worker
 	 */
-	private handleWorkerMessage(data: EmbeddingResponse | InitResponse) {
-		if (data.type === 'init') {
-			if (data.status === 'success') {
+	private handleWorkerMessage(data: unknown) {
+		const message = data as EmbeddingResponse | InitResponse;
+		
+		if (message.type === 'init') {
+			const initMessage = message as InitResponse;
+			if (initMessage.status === 'success') {
 				this.isInitialized = true;
-				console.log(`Embedding worker initialized with device: ${data.device}`);
-				if (data.warning) {
-					console.warn(data.warning);
+				// eslint-disable-next-line no-console
+				console.log(`Embedding worker initialized with device: ${initMessage.device ?? 'unknown'}`);
+				if (initMessage.warning) {
+					console.warn(initMessage.warning);
 				}
 			} else {
-				console.error('Worker initialization failed:', data.error);
+				console.error('Worker initialization failed:', initMessage.error);
 			}
 			return;
 		}
 
-		if (data.type === 'embed') {
-			const pending = this.pendingRequests.get(data.id);
+		if (message.type === 'embed') {
+			const embedMessage = message as EmbeddingResponse;
+			const pending = this.pendingRequests.get(embedMessage.id);
 			if (!pending) {
-				console.warn(`Received response for unknown request ID: ${data.id}`);
+				console.warn(`Received response for unknown request ID: ${embedMessage.id}`);
 				return;
 			}
 
-			this.pendingRequests.delete(data.id);
+			this.pendingRequests.delete(embedMessage.id);
 
-			if (data.status === 'success' && data.embedding) {
-				pending.resolve(data.embedding);
+			if (embedMessage.status === 'success' && embedMessage.embedding) {
+				pending.resolve(embedMessage.embedding);
 			} else {
-				pending.reject(new Error(data.error || 'Unknown error generating embedding'));
+				pending.reject(new Error(embedMessage.error ?? 'Unknown error generating embedding'));
 			}
 		}
 	}
