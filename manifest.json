@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "open-embedding",
+	"name": "Open Embeddings",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "A local-first, high-performance embedding plugin using Transformers.js with WebGPU acceleration.",
+	"author": "Justice Vellacott",
+	"authorUrl": "https://github.com/TheJusticeMan",
 	"isDesktopOnly": false
 }

@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import fs from 'node:fs';
 
 const banner =
 `/*
@@ -10,6 +11,65 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+// Plugin to bundle worker code as a string
+const workerPlugin = {
+	name: 'worker-plugin',
+	setup(build) {
+		build.onEnd(async () => {
+			// Build the worker separately
+			const workerResult = await esbuild.build({
+				entryPoints: ['src/worker.ts'],
+				bundle: true,
+				format: 'iife',
+				target: 'es2020',
+				minify: prod,
+				write: false,
+				platform: 'browser',
+			});
+
+			// Get the worker code as a string
+			const workerCode = workerResult.outputFiles[0].text;
+			
+			// Escape the worker code for injection
+			const escapedWorkerCode = JSON.stringify(workerCode);
+			
+			// Read the main.js file
+			let mainCode = fs.readFileSync('main.js', 'utf-8');
+			
+			// Replace the WORKER_CODE placeholder with the actual worker code
+			// Look for the specific pattern in getWorkerCode function
+			const pattern = /getWorkerCode\(\)[^}]*{\s*return WORKER_CODE;?\s*}/g;
+			const beforeCount = (mainCode.match(pattern) || []).length;
+			
+			mainCode = mainCode.replace(
+				pattern,
+				(match) => match.replace(/return WORKER_CODE;?/, `return ${escapedWorkerCode};`)
+			);
+			
+			const afterCount = (mainCode.match(pattern) || []).length;
+			
+			// Validate that the replacement succeeded
+			if (beforeCount === 0) {
+				// Try a simpler pattern for minified code
+				const simplePattern = /return WORKER_CODE/;
+				if (!simplePattern.test(mainCode)) {
+					throw new Error('Failed to inject worker code: WORKER_CODE pattern not found in main.js');
+				}
+				// Use the simple replace as fallback
+				mainCode = mainCode.replace(simplePattern, `return ${escapedWorkerCode}`);
+			}
+			if (afterCount > 0) {
+				throw new Error(`Failed to inject worker code: ${afterCount} WORKER_CODE pattern(s) still exist after replacement`);
+			}
+			
+			// Write back the main.js file
+			fs.writeFileSync('main.js', mainCode);
+			
+			console.log(`✓ Worker code injected successfully (${Math.max(beforeCount, 1)} replacement(s))`);
+		});
+	},
+};
 
 const context = await esbuild.context({
 	banner: {
@@ -39,6 +99,7 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	plugins: [workerPlugin],
 });
 
 if (prod) {
@@ -47,3 +108,4 @@ if (prod) {
 } else {
 	await context.watch();
 }
+
