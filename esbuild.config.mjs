@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import fs from 'node:fs';
 
 const banner =
 `/*
@@ -10,6 +11,43 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+// Plugin to bundle worker code as a string
+const workerPlugin = {
+	name: 'worker-plugin',
+	setup(build) {
+		build.onEnd(async () => {
+			// Build the worker separately
+			const workerResult = await esbuild.build({
+				entryPoints: ['src/worker.ts'],
+				bundle: true,
+				format: 'iife',
+				target: 'es2020',
+				minify: prod,
+				write: false,
+				platform: 'browser',
+			});
+
+			// Get the worker code as a string
+			const workerCode = workerResult.outputFiles[0].text;
+			
+			// Escape the worker code for injection
+			const escapedWorkerCode = JSON.stringify(workerCode);
+			
+			// Read the main.js file
+			let mainCode = fs.readFileSync('main.js', 'utf-8');
+			
+			// Replace the WORKER_CODE placeholder with the actual worker code
+			mainCode = mainCode.replace(
+				/\/\*\s*@ts-ignore.*?\*\/[\s\n]*return WORKER_CODE;/g,
+				`return ${escapedWorkerCode};`
+			);
+			
+			// Write back the main.js file
+			fs.writeFileSync('main.js', mainCode);
+		});
+	},
+};
 
 const context = await esbuild.context({
 	banner: {
@@ -39,6 +77,7 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	plugins: [workerPlugin],
 });
 
 if (prod) {
@@ -47,3 +86,4 @@ if (prod) {
 } else {
 	await context.watch();
 }
+
